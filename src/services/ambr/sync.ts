@@ -1,11 +1,12 @@
 import { mkdir, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { fetchAmbrList } from './client.js';
+import { fetchAmbrList, fetchWeaponTypeLabels } from './client.js';
 import type {
   AmbrArtifactSetSummary,
   AmbrCharacterSummary,
   AmbrMaterialSummary,
   AmbrWeaponSummary,
+  GenshinElement,
 } from '../../types/ambr.types.js';
 
 const CACHE_DIR = path.join(process.cwd(), 'data', 'cache');
@@ -14,7 +15,7 @@ interface RawCharacter {
   id: number;
   rank: number;
   name: string;
-  element: string;
+  element: GenshinElement | null;
   weaponType: string;
   region?: string;
   icon: string;
@@ -53,15 +54,19 @@ async function writeCacheFile(filename: string, data: unknown): Promise<void> {
 
 export async function syncCharacters(): Promise<AmbrCharacterSummary[]> {
   const raw = await fetchAmbrList<RawCharacter>('avatar');
-  const characters: AmbrCharacterSummary[] = Object.values(raw).map((item) => ({
-    id: item.id,
-    rank: item.rank,
-    name: item.name,
-    element: item.element,
-    weaponType: item.weaponType,
-    icon: item.icon,
-    ...(item.region !== undefined && { region: item.region }),
-  }));
+  // Entries with no element are non-playable placeholders (e.g. outfit-preview mannequins), not real characters.
+  const characters: AmbrCharacterSummary[] = Object.values(raw)
+    .filter((item): item is RawCharacter & { element: GenshinElement } => item.element !== null)
+    .map((item) => ({
+      id: item.id,
+      rank: item.rank,
+      name: item.name,
+      element: item.element,
+      weaponType: item.weaponType,
+      icon: item.icon,
+      ...(item.region !== undefined && { region: item.region }),
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name, 'fr'));
   await writeCacheFile('characters.json', characters);
   return characters;
 }
@@ -101,4 +106,10 @@ export async function syncMaterials(): Promise<AmbrMaterialSummary[]> {
   }));
   await writeCacheFile('materials.json', materials);
   return materials;
+}
+
+export async function syncWeaponTypeLabels(): Promise<Record<string, string>> {
+  const labels = await fetchWeaponTypeLabels();
+  await writeCacheFile('weapon-type-labels.json', labels);
+  return labels;
 }
