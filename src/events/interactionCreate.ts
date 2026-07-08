@@ -6,6 +6,18 @@ export function createInteractionHandler(
   commands: Collection<string, Command>,
 ): (interaction: Interaction) => Promise<void> {
   return async function onInteractionCreate(interaction: Interaction): Promise<void> {
+    if (interaction.isAutocomplete()) {
+      const command = commands.get(interaction.commandName);
+      if (!command?.autocomplete) return;
+
+      try {
+        await command.autocomplete(interaction);
+      } catch (error) {
+        logger.error({ err: error, command: interaction.commandName }, 'Autocomplete failed');
+      }
+      return;
+    }
+
     if (!interaction.isChatInputCommand()) return;
 
     const command = commands.get(interaction.commandName);
