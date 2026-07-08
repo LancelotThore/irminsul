@@ -10,6 +10,7 @@
     "dev": "tsx watch src/index.ts",
     "start": "node dist/src/index.js",
     "deploy-commands": "tsx scripts/deploy-commands.ts",
+    "sync": "tsx scripts/sync.ts",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
