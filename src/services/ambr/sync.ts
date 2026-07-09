@@ -1,6 +1,5 @@
-import { mkdir, rename, writeFile } from 'node:fs/promises';
-import path from 'node:path';
 import { fetchAmbrList } from './client.js';
+import { writeCacheFile } from '../../data/repository.js';
 import type {
   AmbrArtifactSetSummary,
   AmbrCharacterSummary,
@@ -8,8 +7,6 @@ import type {
   AmbrWeaponSummary,
   GenshinElement,
 } from '../../types/ambr.types.js';
-
-const CACHE_DIR = path.join(process.cwd(), 'data', 'cache');
 
 interface RawCharacter {
   id: number;
@@ -41,15 +38,6 @@ interface RawMaterial {
   type: string;
   rank?: number;
   icon: string;
-}
-
-// Write to a temp file then rename, so a failed sync never leaves a truncated/corrupt cache file behind.
-async function writeCacheFile(filename: string, data: unknown): Promise<void> {
-  await mkdir(CACHE_DIR, { recursive: true });
-  const finalPath = path.join(CACHE_DIR, filename);
-  const tempPath = `${finalPath}.tmp`;
-  await writeFile(tempPath, JSON.stringify(data, null, 2), 'utf-8');
-  await rename(tempPath, finalPath);
 }
 
 export async function syncCharacters(): Promise<AmbrCharacterSummary[]> {
