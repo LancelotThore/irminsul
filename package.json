@@ -12,6 +12,7 @@
     "deploy-commands": "tsx scripts/deploy-commands.ts",
     "sync": "tsx scripts/sync.ts",
     "sync:gazette": "tsx scripts/sync-gazette.ts",
+    "sync:materials": "tsx scripts/sync-materials.ts",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",

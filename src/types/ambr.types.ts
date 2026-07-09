@@ -38,3 +38,49 @@ export interface AmbrMaterialSummary {
   rank?: number;
   icon: string;
 }
+
+// Minimal shape of the /avatar/{id} detail endpoint — only the fields needed to compute
+// ascension and talent material costs.
+export interface AmbrAvatarDetail {
+  id: number;
+  name: string;
+  icon: string;
+  items: Record<string, { name: string; rank: number; icon: string }>;
+  upgrade: {
+    promote: { promoteLevel?: number; costItems?: Record<string, number> | null }[];
+  };
+  // Passive talents have no "promote" field at all — only active skills can be upgraded.
+  talent: Record<
+    string,
+    { promote?: Record<string, { costItems?: Record<string, number> | null }> }
+  >;
+}
+
+export interface MaterialRef {
+  id: number;
+  name: string;
+  icon: string;
+  rank: number;
+}
+
+export interface CharacterAscensionMaterials {
+  localSpecialty?: MaterialRef;
+  gem?: MaterialRef;
+  commonDrop?: MaterialRef;
+  bossMaterial?: MaterialRef;
+}
+
+export interface CharacterTalentMaterials {
+  commonDrop?: MaterialRef;
+  book?: MaterialRef;
+  bossMaterial?: MaterialRef;
+  crown?: MaterialRef;
+}
+
+export interface CharacterMaterials {
+  characterId: number;
+  characterName: string;
+  characterIcon: string;
+  ascension: CharacterAscensionMaterials;
+  talents: CharacterTalentMaterials;
+}
