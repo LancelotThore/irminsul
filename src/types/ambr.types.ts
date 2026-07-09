@@ -2,14 +2,17 @@ export interface AmbrListResponse<TItem> {
   response: number;
   data: {
     items: Record<string, TItem>;
+    types?: Record<string, string>;
   };
 }
+
+export type GenshinElement = 'Fire' | 'Water' | 'Wind' | 'Electric' | 'Grass' | 'Ice' | 'Rock';
 
 export interface AmbrCharacterSummary {
   id: number;
   rank: number;
   name: string;
-  element: string;
+  element: GenshinElement;
   weaponType: string;
   region?: string;
   icon: string;
