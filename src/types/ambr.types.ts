@@ -2,7 +2,6 @@ export interface AmbrListResponse<TItem> {
   response: number;
   data: {
     items: Record<string, TItem>;
-    types?: Record<string, string>;
   };
 }
 

@@ -1,7 +1,6 @@
 import { SlashCommandBuilder } from 'discord.js';
 import type { Command } from '../types/command.js';
 import { findCharacterByName, listCharacters } from '../data/character.repository.js';
-import { getWeaponTypeLabels } from '../data/weapon-type.repository.js';
 import { buildCharacterEmbed } from '../embeds/character.embed.js';
 
 const AUTOCOMPLETE_LIMIT = 25;
@@ -30,9 +29,7 @@ export const character: Command = {
       return;
     }
 
-    const weaponTypeLabels = await getWeaponTypeLabels();
-    const embed = buildCharacterEmbed(found, weaponTypeLabels[found.weaponType]);
-    await interaction.reply({ embeds: [embed] });
+    await interaction.reply({ embeds: [buildCharacterEmbed(found)] });
   },
 
   async autocomplete(interaction) {

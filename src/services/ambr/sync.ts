@@ -1,6 +1,6 @@
 import { mkdir, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { fetchAmbrList, fetchWeaponTypeLabels } from './client.js';
+import { fetchAmbrList } from './client.js';
 import type {
   AmbrArtifactSetSummary,
   AmbrCharacterSummary,
@@ -106,10 +106,4 @@ export async function syncMaterials(): Promise<AmbrMaterialSummary[]> {
   }));
   await writeCacheFile('materials.json', materials);
   return materials;
-}
-
-export async function syncWeaponTypeLabels(): Promise<Record<string, string>> {
-  const labels = await fetchWeaponTypeLabels();
-  await writeCacheFile('weapon-type-labels.json', labels);
-  return labels;
 }
