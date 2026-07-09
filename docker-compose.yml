@@ -1,0 +1,16 @@
+services:
+  bot:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      # Cache persists across container recreates. It's populated by running the sync
+      # jobs manually (not on every startup), e.g.:
+      #   docker compose run --rm bot node dist/scripts/sync.js
+      #   docker compose run --rm bot node dist/scripts/sync-gazette.js
+      #   docker compose run --rm bot node dist/scripts/deploy-commands.js
+      - cache:/app/data/cache
+
+volumes:
+  cache:
