@@ -3,23 +3,20 @@ import {
   syncArtifactSets,
   syncCharacters,
   syncMaterials,
-  syncWeaponTypeLabels,
   syncWeapons,
 } from '../src/services/ambr/sync.js';
 
 async function main(): Promise<void> {
-  const [characters, weapons, artifactSets, materials, weaponTypeLabels] = await Promise.all([
+  const [characters, weapons, artifactSets, materials] = await Promise.all([
     syncCharacters(),
     syncWeapons(),
     syncArtifactSets(),
     syncMaterials(),
-    syncWeaponTypeLabels(),
   ]);
 
   logger.info(
     `Synced ${characters.length} characters, ${weapons.length} weapons, ` +
-      `${artifactSets.length} artifact sets, ${materials.length} materials, ` +
-      `${Object.keys(weaponTypeLabels).length} weapon type labels.`,
+      `${artifactSets.length} artifact sets, ${materials.length} materials.`,
   );
 }
 

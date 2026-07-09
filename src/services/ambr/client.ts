@@ -31,11 +31,3 @@ export async function fetchAmbrList<TItem>(resource: string): Promise<Record<str
   const data = await fetchAmbrData<TItem>(resource);
   return data.items;
 }
-
-// The 'types' dict on the weapon list is Ambr's own French translation of weapon type
-// codes (e.g. WEAPON_SWORD_ONE_HAND -> "Épée à une main"), so we reuse it instead of
-// maintaining our own translation table.
-export async function fetchWeaponTypeLabels(): Promise<Record<string, string>> {
-  const data = await fetchAmbrData<unknown>('weapon');
-  return data.types ?? {};
-}
