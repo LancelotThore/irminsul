@@ -1,5 +1,5 @@
 import { logger } from '../src/lib/logger.js';
-import { syncCharacterMaterials } from '../src/services/ambr/materials.js';
+import { syncCharacterMaterials } from '../src/services/ambr/sync.js';
 
 async function main(): Promise<void> {
   const results = await syncCharacterMaterials();

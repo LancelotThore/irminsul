@@ -1,12 +1,24 @@
-import { fetchAmbrList } from './client.js';
-import { writeCacheFile } from '../../data/repository.js';
+import { fetchAmbrDetail, fetchAmbrList } from './client.js';
+import { buildCharacterMaterials } from './materials.js';
+import { readCache, writeCacheFile } from '../../data/repository.js';
+import { logger } from '../../lib/logger.js';
 import type {
   AmbrArtifactSetSummary,
+  AmbrAvatarDetail,
   AmbrCharacterSummary,
   AmbrMaterialSummary,
   AmbrWeaponSummary,
+  CharacterMaterials,
   GenshinElement,
 } from '../../types/ambr.types.js';
+
+// This hits the detail endpoint once per character (127 requests) rather than the ~4
+// list-endpoint calls the other syncs make, so it's kept as a separate, slower sync job.
+const REQUEST_DELAY_MS = 150;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 interface RawCharacter {
   id: number;
@@ -94,4 +106,27 @@ export async function syncMaterials(): Promise<AmbrMaterialSummary[]> {
   }));
   await writeCacheFile('materials.json', materials);
   return materials;
+}
+
+export async function syncCharacterMaterials(): Promise<CharacterMaterials[]> {
+  const characters = await readCache<AmbrCharacterSummary>('characters.json');
+  const materials = await readCache<AmbrMaterialSummary>('materials.json');
+  const materialTypes = new Map(materials.map((material) => [material.id, material.type]));
+
+  const results: CharacterMaterials[] = [];
+  for (const character of characters) {
+    try {
+      const detail = await fetchAmbrDetail<AmbrAvatarDetail>('avatar', character.id);
+      results.push(buildCharacterMaterials(detail, materialTypes));
+    } catch (error) {
+      logger.warn(
+        { err: error, character: character.name },
+        'Failed to fetch character detail, skipping',
+      );
+    }
+    await sleep(REQUEST_DELAY_MS);
+  }
+
+  await writeCacheFile('character-materials.json', results);
+  return results;
 }
