@@ -6,7 +6,7 @@
   "type": "module",
   "main": "dist/src/index.js",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.build.json",
     "dev": "tsx watch src/index.ts",
     "start": "node dist/src/index.js",
     "deploy-commands": "tsx scripts/deploy-commands.ts",
