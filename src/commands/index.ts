@@ -6,6 +6,7 @@ import { characters } from './characters.js';
 import { links } from './links.js';
 import { materials } from './materials.js';
 import { ping } from './ping.js';
+import { remind } from './remind.js';
 import { reset } from './reset.js';
 
 export const commands: Command[] = [
@@ -17,4 +18,5 @@ export const commands: Command[] = [
   build,
   materials,
   admin,
+  remind,
 ];
