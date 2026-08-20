@@ -15,7 +15,7 @@ const materialTypes = new Map<number, string>([
 ]);
 
 const detail: AmbrAvatarDetail = {
-  id: 1,
+  id: '1',
   name: 'Test Character',
   icon: 'UI_AvatarIcon_Test',
   items: {

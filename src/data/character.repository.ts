@@ -1,5 +1,6 @@
-import { readCache } from './repository.js';
-import { getOverrides, mergeWithOverrides } from './overrides.repository.js';
+import { and, eq } from 'drizzle-orm';
+import { db } from '../db/client.js';
+import { characters } from '../db/schema.js';
 import type { AmbrCharacterSummary, GenshinElement } from '../types/ambr.types.js';
 
 export interface CharacterFilters {
@@ -8,29 +9,39 @@ export interface CharacterFilters {
   rank?: number;
 }
 
-function matchesFilters(character: AmbrCharacterSummary, filters: CharacterFilters): boolean {
-  if (filters.element && character.element !== filters.element) return false;
-  if (filters.weaponType && character.weaponType !== filters.weaponType) return false;
-  if (filters.rank && character.rank !== filters.rank) return false;
-  return true;
+function toSummary(row: typeof characters.$inferSelect): AmbrCharacterSummary {
+  return {
+    id: row.id,
+    rank: row.rank,
+    name: row.name,
+    element: row.element,
+    weaponType: row.weaponType,
+    icon: row.icon,
+    ...(row.region !== null && { region: row.region }),
+  };
 }
 
 export async function listCharacters(
   filters: CharacterFilters = {},
 ): Promise<AmbrCharacterSummary[]> {
-  const [characters, overrides] = await Promise.all([
-    readCache<AmbrCharacterSummary>('characters.json'),
-    getOverrides('character'),
-  ]);
-  const merged = mergeWithOverrides(characters, overrides, (character) => character.id.toString());
-  return merged.filter((character) => matchesFilters(character, filters));
+  const conditions = [eq(characters.hidden, false)];
+  if (filters.element) conditions.push(eq(characters.element, filters.element));
+  if (filters.weaponType) conditions.push(eq(characters.weaponType, filters.weaponType));
+  if (filters.rank) conditions.push(eq(characters.rank, filters.rank));
+
+  const rows = await db
+    .select()
+    .from(characters)
+    .where(and(...conditions));
+
+  return rows.map(toSummary).sort((a, b) => a.name.localeCompare(b.name, 'fr'));
 }
 
 export async function findCharacterByName(
   name: string,
   filters: CharacterFilters = {},
 ): Promise<AmbrCharacterSummary | undefined> {
-  const characters = await listCharacters(filters);
+  const list = await listCharacters(filters);
   const normalized = name.trim().toLowerCase();
-  return characters.find((character) => character.name.toLowerCase() === normalized);
+  return list.find((character) => character.name.toLowerCase() === normalized);
 }

@@ -1,65 +1,30 @@
+import { and, eq, sql } from 'drizzle-orm';
 import type {
   AutocompleteInteraction,
   ChatInputCommandInteraction,
   SlashCommandSubcommandGroupBuilder,
 } from 'discord.js';
-import { findCharacterByName } from '../../data/character.repository.js';
+import { findCharacterByName, listCharacters } from '../../data/character.repository.js';
 import {
   findMaterialByName,
   findMaterialsByCharacterName,
   listAllMaterials,
-  listCharacterMaterials,
 } from '../../data/materials.repository.js';
-import { upsertOverride } from '../../data/overrides.repository.js';
-import type {
-  CharacterAscensionMaterials,
-  CharacterMaterials,
-  CharacterTalentMaterials,
-  MaterialRef,
-} from '../../types/ambr.types.js';
+import { db } from '../../db/client.js';
+import { characterMaterialSlots } from '../../db/schema.js';
+import { SLOT_LABELS } from '../../lib/material-slots.js';
+import type { MaterialSlot } from '../../lib/material-slots.js';
 
 const AUTOCOMPLETE_LIMIT = 25;
 
-type AscensionKey = keyof CharacterAscensionMaterials;
-type TalentKey = keyof CharacterTalentMaterials;
-type MaterialSlot = `ascension_${AscensionKey}` | `talent_${TalentKey}`;
-
-const SLOT_LABELS: Record<MaterialSlot, string> = {
-  ascension_localSpecialty: 'Ascension - Spécialité locale',
-  ascension_gem: 'Ascension - Gemme',
-  ascension_commonDrop: 'Ascension - Butin commun',
-  ascension_bossMaterial: 'Ascension - Matériau de boss',
-  talent_commonDrop: 'Talent - Butin commun',
-  talent_book: 'Talent - Livre',
-  talent_bossMaterial: 'Talent - Matériau de boss hebdomadaire',
-  talent_crown: 'Talent - Couronne',
-};
-
-function setOrDelete<T extends object, K extends keyof T>(
-  obj: T,
-  key: K,
-  value: T[K] | undefined,
-): T {
-  const next = { ...obj };
-  if (value === undefined) {
-    delete next[key];
-  } else {
-    next[key] = value;
-  }
-  return next;
-}
-
-function applySlot(
-  materials: CharacterMaterials,
+function getSlotValue(
+  materials: Awaited<ReturnType<typeof findMaterialsByCharacterName>>,
   slot: MaterialSlot,
-  ref: MaterialRef | undefined,
-): CharacterMaterials {
-  if (slot.startsWith('ascension_')) {
-    const key = slot.slice('ascension_'.length) as AscensionKey;
-    return { ...materials, ascension: setOrDelete(materials.ascension, key, ref) };
-  }
-  const key = slot.slice('talent_'.length) as TalentKey;
-  return { ...materials, talents: setOrDelete(materials.talents, key, ref) };
+) {
+  if (!materials) return undefined;
+  return slot.startsWith('ascension_')
+    ? materials.ascension[slot.slice('ascension_'.length) as keyof typeof materials.ascension]
+    : materials.talents[slot.slice('talent_'.length) as keyof typeof materials.talents];
 }
 
 export function buildMaterialsGroup(
@@ -111,29 +76,13 @@ export function buildMaterialsGroup(
     );
 }
 
-async function resolveMaterials(characterName: string): Promise<CharacterMaterials | undefined> {
-  const existing = await findMaterialsByCharacterName(characterName);
-  if (existing) return existing;
-
-  const character = await findCharacterByName(characterName);
-  if (!character) return undefined;
-
-  return {
-    characterId: character.id,
-    characterName: character.name,
-    characterIcon: character.icon,
-    ascension: {},
-    talents: {},
-  };
-}
-
 async function handleSet(interaction: ChatInputCommandInteraction): Promise<void> {
   const characterName = interaction.options.getString('character', true);
   const slot = interaction.options.getString('slot', true) as MaterialSlot;
   const materialName = interaction.options.getString('material', true);
 
-  const materials = await resolveMaterials(characterName);
-  if (!materials) {
+  const character = await findCharacterByName(characterName);
+  if (!character) {
     await interaction.reply({
       content: `Aucun personnage nommé "${characterName}".`,
       ephemeral: true,
@@ -157,22 +106,29 @@ async function handleSet(interaction: ChatInputCommandInteraction): Promise<void
     return;
   }
 
-  const ref: MaterialRef = {
-    id: material.id,
-    name: material.name,
-    icon: material.icon,
-    rank: material.rank,
-  };
-
-  const updated = applySlot(materials, slot, ref);
-  await upsertOverride(
-    'character_materials',
-    materials.characterId.toString(),
-    updated,
-    interaction.user.id,
-  );
+  await db
+    .insert(characterMaterialSlots)
+    .values({
+      characterId: character.id,
+      slot,
+      materialId: material.id,
+      source: 'admin',
+      locked: true,
+      updatedBy: interaction.user.id,
+    })
+    .onConflictDoUpdate({
+      target: [characterMaterialSlots.characterId, characterMaterialSlots.slot],
+      set: {
+        materialId: material.id,
+        hidden: false,
+        source: 'admin',
+        locked: true,
+        updatedBy: interaction.user.id,
+        updatedAt: sql`(current_timestamp)`,
+      },
+    });
   await interaction.reply({
-    content: `"${SLOT_LABELS[slot]}" pour ${materials.characterName} → ${material.name}.`,
+    content: `"${SLOT_LABELS[slot]}" pour ${character.name} → ${material.name}.`,
     ephemeral: true,
   });
 }
@@ -181,8 +137,8 @@ async function handleClear(interaction: ChatInputCommandInteraction): Promise<vo
   const characterName = interaction.options.getString('character', true);
   const slot = interaction.options.getString('slot', true) as MaterialSlot;
 
-  const materials = await resolveMaterials(characterName);
-  if (!materials) {
+  const character = await findCharacterByName(characterName);
+  if (!character) {
     await interaction.reply({
       content: `Aucun personnage nommé "${characterName}".`,
       ephemeral: true,
@@ -190,15 +146,31 @@ async function handleClear(interaction: ChatInputCommandInteraction): Promise<vo
     return;
   }
 
-  const updated = applySlot(materials, slot, undefined);
-  await upsertOverride(
-    'character_materials',
-    materials.characterId.toString(),
-    updated,
-    interaction.user.id,
-  );
+  const currentMaterials = await findMaterialsByCharacterName(characterName);
+  if (!getSlotValue(currentMaterials, slot)) {
+    await interaction.reply({
+      content: `"${SLOT_LABELS[slot]}" est déjà vide pour ${character.name}.`,
+      ephemeral: true,
+    });
+    return;
+  }
+
+  await db
+    .update(characterMaterialSlots)
+    .set({
+      hidden: true,
+      locked: true,
+      updatedBy: interaction.user.id,
+      updatedAt: sql`(current_timestamp)`,
+    })
+    .where(
+      and(
+        eq(characterMaterialSlots.characterId, character.id),
+        eq(characterMaterialSlots.slot, slot),
+      ),
+    );
   await interaction.reply({
-    content: `"${SLOT_LABELS[slot]}" retiré pour ${materials.characterName}.`,
+    content: `"${SLOT_LABELS[slot]}" retiré pour ${character.name}.`,
     ephemeral: true,
   });
 }
@@ -218,11 +190,14 @@ export async function autocompleteMaterialsOption(
   const focused = focusedOption.value.toLowerCase();
 
   if (focusedOption.name === 'character') {
-    const all = await listCharacterMaterials();
+    // Any character can receive a material slot, not just ones that already have one
+    // (e.g. a freshly admin-added character has none yet) — so this suggests from the
+    // full character list rather than only characters with existing slots.
+    const all = await listCharacters();
     const matches = all
-      .filter((m) => m.characterName.toLowerCase().includes(focused))
+      .filter((c) => c.name.toLowerCase().includes(focused))
       .slice(0, AUTOCOMPLETE_LIMIT)
-      .map((m) => ({ name: m.characterName, value: m.characterName }));
+      .map((c) => ({ name: c.name, value: c.name }));
     await interaction.respond(matches);
     return;
   }

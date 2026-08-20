@@ -1,3 +1,4 @@
+import { runMigrations } from '../src/db/migrate.js';
 import { logger } from '../src/lib/logger.js';
 import {
   syncArtifactSets,
@@ -7,6 +8,8 @@ import {
 } from '../src/services/ambr/sync.js';
 
 async function main(): Promise<void> {
+  runMigrations();
+
   const [characters, weapons, artifactSets, materials] = await Promise.all([
     syncCharacters(),
     syncWeapons(),

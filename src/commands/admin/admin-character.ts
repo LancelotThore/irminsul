@@ -1,12 +1,15 @@
+import { eq, sql } from 'drizzle-orm';
 import type {
   AutocompleteInteraction,
   ChatInputCommandInteraction,
   SlashCommandSubcommandGroupBuilder,
 } from 'discord.js';
 import { findCharacterByName, listCharacters } from '../../data/character.repository.js';
-import { upsertOverride, deleteOverride } from '../../data/overrides.repository.js';
+import { normalizeCharacterName } from '../../data/gazette-build.repository.js';
+import { db } from '../../db/client.js';
+import { characters } from '../../db/schema.js';
 import { ELEMENT_LABELS, NATION_LABELS, WEAPON_TYPE_LABELS } from '../../lib/genshin-labels.js';
-import type { AmbrCharacterSummary, GenshinElement } from '../../types/ambr.types.js';
+import type { GenshinElement } from '../../types/ambr.types.js';
 
 const AUTOCOMPLETE_LIMIT = 25;
 
@@ -20,7 +23,6 @@ export function buildCharacterGroup(
       sub
         .setName('add')
         .setDescription('Ajoute un nouveau personnage')
-        .addIntegerOption((o) => o.setName('id').setDescription('ID Ambr').setRequired(true))
         .addStringOption((o) => o.setName('name').setDescription('Nom').setRequired(true))
         .addIntegerOption((o) =>
           o
@@ -126,7 +128,6 @@ export function buildCharacterGroup(
 }
 
 async function handleAdd(interaction: ChatInputCommandInteraction): Promise<void> {
-  const id = interaction.options.getInteger('id', true);
   const name = interaction.options.getString('name', true);
   const rank = interaction.options.getInteger('rarity', true);
   const element = interaction.options.getString('element', true) as GenshinElement;
@@ -143,7 +144,11 @@ async function handleAdd(interaction: ChatInputCommandInteraction): Promise<void
     return;
   }
 
-  const record: AmbrCharacterSummary = {
+  // Synthetic id, not an Ambr one — avoids asking the admin to invent a unique numeric
+  // id (and risking a collision with Ambr's own id space) for a fully custom entry.
+  const id = `admin-${normalizeCharacterName(name)}`;
+
+  await db.insert(characters).values({
     id,
     rank,
     name,
@@ -151,9 +156,10 @@ async function handleAdd(interaction: ChatInputCommandInteraction): Promise<void
     weaponType,
     icon,
     ...(region && { region }),
-  };
-
-  await upsertOverride('character', id.toString(), record, interaction.user.id);
+    source: 'admin',
+    locked: true,
+    updatedBy: interaction.user.id,
+  });
   await interaction.reply({ content: `Personnage "${name}" ajouté.`, ephemeral: true });
 }
 
@@ -172,17 +178,21 @@ async function handleEdit(interaction: ChatInputCommandInteraction): Promise<voi
   const icon = interaction.options.getString('icon');
   const region = interaction.options.getString('region');
 
-  const record: AmbrCharacterSummary = {
-    ...found,
-    ...(newName && { name: newName }),
-    ...(rank && { rank }),
-    ...(element && { element }),
-    ...(weaponType && { weaponType }),
-    ...(icon && { icon }),
-    ...(region && { region }),
-  };
-
-  await upsertOverride('character', found.id.toString(), record, interaction.user.id);
+  await db
+    .update(characters)
+    .set({
+      ...(newName && { name: newName }),
+      ...(rank && { rank }),
+      ...(element && { element }),
+      ...(weaponType && { weaponType }),
+      ...(icon && { icon }),
+      ...(region && { region }),
+      source: 'admin',
+      locked: true,
+      updatedBy: interaction.user.id,
+      updatedAt: sql`(current_timestamp)`,
+    })
+    .where(eq(characters.id, found.id));
   await interaction.reply({ content: `Personnage "${found.name}" modifié.`, ephemeral: true });
 }
 
@@ -194,7 +204,15 @@ async function handleDelete(interaction: ChatInputCommandInteraction): Promise<v
     return;
   }
 
-  await deleteOverride('character', found.id.toString(), interaction.user.id);
+  await db
+    .update(characters)
+    .set({
+      hidden: true,
+      locked: true,
+      updatedBy: interaction.user.id,
+      updatedAt: sql`(current_timestamp)`,
+    })
+    .where(eq(characters.id, found.id));
   await interaction.reply({ content: `Personnage "${found.name}" supprimé.`, ephemeral: true });
 }
 
@@ -211,9 +229,9 @@ export async function autocompleteCharacterName(
   interaction: AutocompleteInteraction,
 ): Promise<void> {
   const focused = interaction.options.getFocused().toLowerCase();
-  const characters = await listCharacters();
+  const characterList = await listCharacters();
 
-  const matches = characters
+  const matches = characterList
     .filter((c) => c.name.toLowerCase().includes(focused))
     .slice(0, AUTOCOMPLETE_LIMIT)
     .map((c) => ({ name: c.name, value: c.name }));

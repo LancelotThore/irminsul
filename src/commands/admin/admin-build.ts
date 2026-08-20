@@ -1,3 +1,4 @@
+import { eq, sql } from 'drizzle-orm';
 import type {
   AutocompleteInteraction,
   ChatInputCommandInteraction,
@@ -8,8 +9,8 @@ import {
   listGazetteBuilds,
   normalizeCharacterName,
 } from '../../data/gazette-build.repository.js';
-import { upsertOverride, deleteOverride } from '../../data/overrides.repository.js';
-import type { GazetteBuild } from '../../data/gazette-build.repository.js';
+import { db } from '../../db/client.js';
+import { gazetteBuilds } from '../../db/schema.js';
 
 const AUTOCOMPLETE_LIMIT = 25;
 
@@ -75,8 +76,16 @@ async function handleAdd(interaction: ChatInputCommandInteraction): Promise<void
     return;
   }
 
-  const record: GazetteBuild = { slug: slugify(name), name, imageUrl, pageUrl };
-  await upsertOverride('gazette_build', normalizeCharacterName(name), record, interaction.user.id);
+  await db.insert(gazetteBuilds).values({
+    characterKey: normalizeCharacterName(name),
+    slug: slugify(name),
+    name,
+    imageUrl,
+    pageUrl,
+    source: 'admin',
+    locked: true,
+    updatedBy: interaction.user.id,
+  });
   await interaction.reply({ content: `Build "${name}" ajouté.`, ephemeral: true });
 }
 
@@ -91,18 +100,17 @@ async function handleEdit(interaction: ChatInputCommandInteraction): Promise<voi
   const imageUrl = interaction.options.getString('image');
   const pageUrl = interaction.options.getString('page');
 
-  const record: GazetteBuild = {
-    ...found,
-    ...(imageUrl && { imageUrl }),
-    ...(pageUrl && { pageUrl }),
-  };
-
-  await upsertOverride(
-    'gazette_build',
-    normalizeCharacterName(found.name),
-    record,
-    interaction.user.id,
-  );
+  await db
+    .update(gazetteBuilds)
+    .set({
+      ...(imageUrl && { imageUrl }),
+      ...(pageUrl && { pageUrl }),
+      source: 'admin',
+      locked: true,
+      updatedBy: interaction.user.id,
+      updatedAt: sql`(current_timestamp)`,
+    })
+    .where(eq(gazetteBuilds.characterKey, normalizeCharacterName(found.name)));
   await interaction.reply({ content: `Build "${found.name}" modifié.`, ephemeral: true });
 }
 
@@ -114,7 +122,15 @@ async function handleDelete(interaction: ChatInputCommandInteraction): Promise<v
     return;
   }
 
-  await deleteOverride('gazette_build', normalizeCharacterName(found.name), interaction.user.id);
+  await db
+    .update(gazetteBuilds)
+    .set({
+      hidden: true,
+      locked: true,
+      updatedBy: interaction.user.id,
+      updatedAt: sql`(current_timestamp)`,
+    })
+    .where(eq(gazetteBuilds.characterKey, normalizeCharacterName(found.name)));
   await interaction.reply({ content: `Build "${found.name}" supprimé.`, ephemeral: true });
 }
 
