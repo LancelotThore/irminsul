@@ -1,7 +1,13 @@
-import { readCache } from './repository.js';
-import type { GazetteBuildPage } from '../services/gazette/client.js';
+import { eq } from 'drizzle-orm';
+import { db } from '../db/client.js';
+import { gazetteBuilds } from '../db/schema.js';
 
-export type GazetteBuild = GazetteBuildPage;
+export interface GazetteBuild {
+  slug: string;
+  name: string;
+  imageUrl: string;
+  pageUrl: string;
+}
 
 const COMBINING_DIACRITICS = /[̀-ͯ]/g;
 
@@ -13,12 +19,19 @@ export function normalizeCharacterName(name: string): string {
     .replace(/[^a-z0-9]/g, '');
 }
 
+function toBuild(row: typeof gazetteBuilds.$inferSelect): GazetteBuild {
+  return { slug: row.slug, name: row.name, imageUrl: row.imageUrl, pageUrl: row.pageUrl };
+}
+
 export async function listGazetteBuilds(): Promise<GazetteBuild[]> {
-  return readCache<GazetteBuild>('gazette-builds.json');
+  const rows = await db.select().from(gazetteBuilds).where(eq(gazetteBuilds.hidden, false));
+  return rows.map(toBuild);
 }
 
 export async function findBuildByCharacterName(name: string): Promise<GazetteBuild | undefined> {
-  const builds = await listGazetteBuilds();
-  const target = normalizeCharacterName(name);
-  return builds.find((build) => normalizeCharacterName(build.name) === target);
+  const [row] = await db
+    .select()
+    .from(gazetteBuilds)
+    .where(eq(gazetteBuilds.characterKey, normalizeCharacterName(name)));
+  return row && !row.hidden ? toBuild(row) : undefined;
 }

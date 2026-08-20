@@ -8,7 +8,9 @@ export interface AmbrListResponse<TItem> {
 export type GenshinElement = 'Fire' | 'Water' | 'Wind' | 'Electric' | 'Grass' | 'Ice' | 'Rock';
 
 export interface AmbrCharacterSummary {
-  id: number;
+  // String, not number: Ambr uses composite ids like "10000005-pyro" for Traveler
+  // variants (one base character id, one suffix per element).
+  id: string;
   rank: number;
   name: string;
   element: GenshinElement;
@@ -42,7 +44,7 @@ export interface AmbrMaterialSummary {
 // Minimal shape of the /avatar/{id} detail endpoint — only the fields needed to compute
 // ascension and talent material costs.
 export interface AmbrAvatarDetail {
-  id: number;
+  id: string;
   name: string;
   icon: string;
   items: Record<string, { name: string; rank: number; icon: string }>;
@@ -78,7 +80,7 @@ export interface CharacterTalentMaterials {
 }
 
 export interface CharacterMaterials {
-  characterId: number;
+  characterId: string;
   characterName: string;
   characterIcon: string;
   ascension: CharacterAscensionMaterials;

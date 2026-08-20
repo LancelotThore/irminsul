@@ -1,5 +1,8 @@
+import { eq, sql } from 'drizzle-orm';
 import { fetchCharacterBuildPage, fetchCharacterSlugs } from './client.js';
-import { writeCacheFile } from '../../data/repository.js';
+import { normalizeCharacterName } from '../../data/gazette-build.repository.js';
+import { db } from '../../db/client.js';
+import { gazetteBuilds } from '../../db/schema.js';
 import { logger } from '../../lib/logger.js';
 import type { GazetteBuildPage } from './client.js';
 
@@ -20,6 +23,15 @@ export async function syncGazetteBuilds(): Promise<GazetteBuildPage[]> {
       const page = await fetchCharacterBuildPage(slug);
       if (page) {
         pages.push(page);
+        const characterKey = normalizeCharacterName(page.name);
+        await db
+          .insert(gazetteBuilds)
+          .values({ characterKey, ...page, source: 'gazette' })
+          .onConflictDoUpdate({
+            target: gazetteBuilds.characterKey,
+            set: { ...page, source: 'gazette', updatedAt: sql`(current_timestamp)` },
+            setWhere: eq(gazetteBuilds.locked, false),
+          });
       } else {
         logger.warn(`Gazette page "${slug}" has no build guide yet, skipping`);
       }
@@ -29,6 +41,5 @@ export async function syncGazetteBuilds(): Promise<GazetteBuildPage[]> {
     await sleep(REQUEST_DELAY_MS);
   }
 
-  await writeCacheFile('gazette-builds.json', pages);
   return pages;
 }

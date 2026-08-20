@@ -1,5 +1,6 @@
 import type { Collection, Interaction } from 'discord.js';
 import { logger } from '../lib/logger.js';
+import { isOwner } from '../lib/permissions.js';
 import type { Command } from '../types/command.js';
 
 export function createInteractionHandler(
@@ -23,6 +24,14 @@ export function createInteractionHandler(
     const command = commands.get(interaction.commandName);
     if (!command) {
       logger.warn(`Unknown command received: ${interaction.commandName}`);
+      return;
+    }
+
+    if (command.ownerOnly && !isOwner(interaction.user.id)) {
+      await interaction.reply({
+        content: "Tu n'es pas autorisé à utiliser cette commande.",
+        ephemeral: true,
+      });
       return;
     }
 
