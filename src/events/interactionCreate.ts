@@ -34,10 +34,21 @@ export function createInteractionHandler(
         content: "Une erreur est survenue lors de l'exécution de la commande.",
         ephemeral: true,
       };
-      if (interaction.replied || interaction.deferred) {
-        await interaction.followUp(payload);
-      } else {
-        await interaction.reply(payload);
+      try {
+        if (interaction.replied || interaction.deferred) {
+          await interaction.followUp(payload);
+        } else {
+          await interaction.reply(payload);
+        }
+      } catch (replyError) {
+        // The interaction itself is gone (e.g. it expired past Discord's response
+        // window) — nothing more we can do, but this must never throw uncaught: an
+        // unhandled rejection here would crash the whole bot process over one bad
+        // interaction, taking down every other in-flight command with it.
+        logger.error(
+          { err: replyError, command: interaction.commandName },
+          'Failed to report command failure back to Discord',
+        );
       }
     }
   };
