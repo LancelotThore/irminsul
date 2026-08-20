@@ -1,10 +1,13 @@
 import { Client, Collection, GatewayIntentBits } from 'discord.js';
 import { env } from './config/env.js';
+import { runMigrations } from './db/migrate.js';
 import { logger } from './lib/logger.js';
 import { commands } from './commands/index.js';
 import { onReady } from './events/ready.js';
 import { createInteractionHandler } from './events/interactionCreate.js';
 import type { Command } from './types/command.js';
+
+runMigrations();
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
