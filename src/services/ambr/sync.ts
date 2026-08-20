@@ -1,3 +1,4 @@
+import { disambiguatedName } from './character-name.js';
 import { fetchAmbrDetail, fetchAmbrList } from './client.js';
 import { buildCharacterMaterials } from './materials.js';
 import { readCache, writeCacheFile } from '../../data/repository.js';
@@ -60,7 +61,7 @@ export async function syncCharacters(): Promise<AmbrCharacterSummary[]> {
     .map((item) => ({
       id: item.id,
       rank: item.rank,
-      name: item.name,
+      name: disambiguatedName(item.name, item.element),
       element: item.element,
       weaponType: item.weaponType,
       icon: item.icon,
@@ -117,7 +118,13 @@ export async function syncCharacterMaterials(): Promise<CharacterMaterials[]> {
   for (const character of characters) {
     try {
       const detail = await fetchAmbrDetail<AmbrAvatarDetail>('avatar', character.id);
-      results.push(buildCharacterMaterials(detail, materialTypes));
+      // The detail endpoint returns Ambr's raw (Traveler-ambiguous) name — use the
+      // already-disambiguated one from characters.json instead, so /materials matches
+      // /character and /build for the Traveler variants.
+      results.push({
+        ...buildCharacterMaterials(detail, materialTypes),
+        characterName: character.name,
+      });
     } catch (error) {
       logger.warn(
         { err: error, character: character.name },
