@@ -6,6 +6,14 @@ import { onReady } from './events/ready.js';
 import { createInteractionHandler } from './events/interactionCreate.js';
 import type { Command } from './types/command.js';
 
+// Last-resort safety net: a single bad Discord API call or unforeseen rejection
+// anywhere in the codebase must never take the whole bot down (this happened in
+// practice — an expired interaction's fallback error-reply itself throwing, which is
+// now fixed at the source in interactionCreate.ts, but this stays as a backstop).
+process.on('unhandledRejection', (error: unknown) => {
+  logger.error({ err: error }, 'Unhandled rejection');
+});
+
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
 const commandMap = new Collection<string, Command>();
