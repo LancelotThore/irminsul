@@ -7,11 +7,15 @@ export type GazetteBuild = GazetteBuildPage;
 const COMBINING_DIACRITICS = /[̀-ͯ]/g;
 
 export function normalizeCharacterName(name: string): string {
-  return name
+  const normalized = name
     .normalize('NFD')
     .replace(COMBINING_DIACRITICS, '')
     .toLowerCase()
     .replace(/[^a-z0-9]/g, '');
+  // La Gazette guides aren't split by Traveler gender (only by element), but our
+  // character data is ("Voyageur"/"Voyageuse") — fold the female form onto the male
+  // one so both resolve to the same build guide.
+  return normalized.replace(/^voyageuse/, 'voyageur');
 }
 
 export async function listGazetteBuilds(): Promise<GazetteBuild[]> {
