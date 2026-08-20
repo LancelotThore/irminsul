@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { disambiguatedName } from '../src/services/ambr/character-name.js';
-import { normalizeCharacterName } from '../src/data/gazette-build.repository.js';
+import { disambiguatedName, isCanonicalCharacter } from '../src/services/ambr/character-name.js';
 
 describe('disambiguatedName', () => {
   it('appends the element label to a male Traveler entry', () => {
@@ -16,21 +15,16 @@ describe('disambiguatedName', () => {
   });
 });
 
-describe('normalizeCharacterName (Traveler gender folding)', () => {
-  it('normalizes a male and female Traveler entry to the same key', () => {
-    expect(normalizeCharacterName('Voyageur Anémo')).toBe(
-      normalizeCharacterName('Voyageuse Anémo'),
-    );
+describe('isCanonicalCharacter', () => {
+  it('keeps the male Traveler entry (Aether)', () => {
+    expect(isCanonicalCharacter('Voyageur')).toBe(true);
   });
 
-  it('matches the Gazette build title format exactly', () => {
-    expect(normalizeCharacterName('Voyageur Anémo')).toBe('voyageuranemo');
-    expect(normalizeCharacterName('Voyageuse Anémo')).toBe('voyageuranemo');
+  it('drops the female Traveler entry (Lumine) — same character, same stats per element', () => {
+    expect(isCanonicalCharacter('Voyageuse')).toBe(false);
   });
 
-  it('does not fold unrelated names starting with a similar prefix', () => {
-    expect(normalizeCharacterName('Voyageuse Dendro')).not.toBe(
-      normalizeCharacterName('Voyageur Anémo'),
-    );
+  it('keeps every other character', () => {
+    expect(isCanonicalCharacter('Amber')).toBe(true);
   });
 });

@@ -1,5 +1,5 @@
 import { eq, sql } from 'drizzle-orm';
-import { disambiguatedName } from './character-name.js';
+import { disambiguatedName, isCanonicalCharacter } from './character-name.js';
 import { fetchAmbrDetail, fetchAmbrList } from './client.js';
 import { buildCharacterMaterials } from './materials.js';
 import { db } from '../../db/client.js';
@@ -74,6 +74,7 @@ export async function syncCharacters(): Promise<AmbrCharacterSummary[]> {
   // Entries with no element are non-playable placeholders (e.g. outfit-preview mannequins), not real characters.
   const items: AmbrCharacterSummary[] = Object.values(raw)
     .filter((item): item is RawCharacter & { element: GenshinElement } => item.element !== null)
+    .filter((item) => isCanonicalCharacter(item.name))
     .map((item) => ({
       id: String(item.id),
       rank: item.rank,
