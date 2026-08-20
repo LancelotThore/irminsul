@@ -41,7 +41,12 @@ export function startReminderScheduler(client: Client): void {
     const now = new Date();
     const from = lastCheck;
     lastCheck = now;
-    void checkReminders(client, from, now);
+    // Same reasoning as the try/catch around the fallback reply in
+    // interactionCreate.ts: an unhandled rejection here would crash the whole bot,
+    // not just skip one check cycle.
+    checkReminders(client, from, now).catch((error: unknown) => {
+      logger.error({ err: error }, 'Reminder check cycle failed');
+    });
   }, CHECK_INTERVAL_MS);
 
   logger.info('Reminder scheduler started');
