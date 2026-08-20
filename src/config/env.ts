@@ -5,6 +5,7 @@ const envSchema = z.object({
   DISCORD_TOKEN: z.string().min(1, 'DISCORD_TOKEN is required'),
   DISCORD_CLIENT_ID: z.string().min(1, 'DISCORD_CLIENT_ID is required'),
   DISCORD_DEV_GUILD_ID: z.string().optional(),
+  BOT_OWNER_ID: z.string().min(1, 'BOT_OWNER_ID is required'),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
 });
 
