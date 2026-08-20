@@ -22,5 +22,6 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --ignore-scripts
 
 COPY --from=build /app/dist ./dist
+COPY drizzle ./drizzle
 
 CMD ["node", "dist/src/index.js"]

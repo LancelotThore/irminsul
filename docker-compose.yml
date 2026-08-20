@@ -11,6 +11,10 @@ services:
       #   docker compose run --rm bot node dist/scripts/sync-gazette.js
       #   docker compose run --rm bot node dist/scripts/deploy-commands.js
       - cache:/app/data/cache
+      # SQLite DB for manual overrides (admin-edited game data) and reminders — must
+      # persist across container recreates just like the cache.
+      - db:/app/data/db
 
 volumes:
   cache:
+  db:
