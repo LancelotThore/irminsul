@@ -1,4 +1,5 @@
 import { readCache } from './repository.js';
+import { getOverrides, mergeWithOverrides } from './overrides.repository.js';
 import type { GazetteBuildPage } from '../services/gazette/client.js';
 
 export type GazetteBuild = GazetteBuildPage;
@@ -14,7 +15,11 @@ export function normalizeCharacterName(name: string): string {
 }
 
 export async function listGazetteBuilds(): Promise<GazetteBuild[]> {
-  return readCache<GazetteBuild>('gazette-builds.json');
+  const [builds, overrides] = await Promise.all([
+    readCache<GazetteBuild>('gazette-builds.json'),
+    getOverrides('gazette_build'),
+  ]);
+  return mergeWithOverrides(builds, overrides, (build) => normalizeCharacterName(build.name));
 }
 
 export async function findBuildByCharacterName(name: string): Promise<GazetteBuild | undefined> {

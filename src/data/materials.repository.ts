@@ -1,8 +1,23 @@
 import { readCache } from './repository.js';
-import type { CharacterMaterials } from '../types/ambr.types.js';
+import { getOverrides, mergeWithOverrides } from './overrides.repository.js';
+import type { AmbrMaterialSummary, CharacterMaterials } from '../types/ambr.types.js';
+
+export async function listAllMaterials(): Promise<AmbrMaterialSummary[]> {
+  return readCache<AmbrMaterialSummary>('materials.json');
+}
+
+export async function findMaterialByName(name: string): Promise<AmbrMaterialSummary | undefined> {
+  const all = await listAllMaterials();
+  const normalized = name.trim().toLowerCase();
+  return all.find((material) => material.name.toLowerCase() === normalized);
+}
 
 export async function listCharacterMaterials(): Promise<CharacterMaterials[]> {
-  return readCache<CharacterMaterials>('character-materials.json');
+  const [materials, overrides] = await Promise.all([
+    readCache<CharacterMaterials>('character-materials.json'),
+    getOverrides('character_materials'),
+  ]);
+  return mergeWithOverrides(materials, overrides, (entry) => entry.characterId.toString());
 }
 
 export async function findMaterialsByCharacterName(

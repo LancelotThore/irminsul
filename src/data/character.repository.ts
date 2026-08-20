@@ -1,4 +1,5 @@
 import { readCache } from './repository.js';
+import { getOverrides, mergeWithOverrides } from './overrides.repository.js';
 import type { AmbrCharacterSummary, GenshinElement } from '../types/ambr.types.js';
 
 export interface CharacterFilters {
@@ -17,8 +18,12 @@ function matchesFilters(character: AmbrCharacterSummary, filters: CharacterFilte
 export async function listCharacters(
   filters: CharacterFilters = {},
 ): Promise<AmbrCharacterSummary[]> {
-  const characters = await readCache<AmbrCharacterSummary>('characters.json');
-  return characters.filter((character) => matchesFilters(character, filters));
+  const [characters, overrides] = await Promise.all([
+    readCache<AmbrCharacterSummary>('characters.json'),
+    getOverrides('character'),
+  ]);
+  const merged = mergeWithOverrides(characters, overrides, (character) => character.id.toString());
+  return merged.filter((character) => matchesFilters(character, filters));
 }
 
 export async function findCharacterByName(
