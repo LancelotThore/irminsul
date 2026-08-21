@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
 // Columns shared by every table an admin can edit at runtime. `locked` is set the
 // moment an admin touches a row; sync upserts are conditioned on `NOT locked`, so a
@@ -48,41 +48,23 @@ export const artifactSets = sqliteTable('artifact_sets', {
   icon: text('icon').notNull(),
 });
 
-export const materials = sqliteTable('materials', {
-  id: integer('id').primaryKey(),
+// Farming-materials guide image, scraped from Sephijin — mirrors gazetteBuilds exactly
+// (same key/shape/governance), since it's the same kind of content from a different
+// site. Replaced the old Ambr-computed ascension/talent breakdown entirely: that
+// required a `materials` catalog table and a `character_material_slots` join table,
+// which are gone now that nothing derives per-slot data anymore.
+export const materialsGuides = sqliteTable('materials_guides', {
+  // normalizeCharacterName(name) — same key as gazetteBuilds, same Voyageur handling.
+  characterKey: text('character_key').primaryKey(),
+  slug: text('slug').notNull(),
   name: text('name').notNull(),
-  type: text('type').notNull(),
-  rank: integer('rank'),
-  icon: text('icon').notNull(),
+  imageUrl: text('image_url').notNull(),
+  pageUrl: text('page_url').notNull(),
+  source: text('source', { enum: ['sephijin', 'admin'] })
+    .notNull()
+    .default('sephijin'),
+  ...governance,
 });
-
-// Replaces the old nested-JSON character-materials blob (which duplicated each
-// material's name/icon/rank at every slot it appeared in). One row per filled
-// ascension/talent slot, referencing `materials` by id instead of embedding a copy.
-export const characterMaterialSlots = sqliteTable(
-  'character_material_slots',
-  {
-    characterId: text('character_id').notNull(),
-    slot: text('slot', {
-      enum: [
-        'ascension_localSpecialty',
-        'ascension_gem',
-        'ascension_commonDrop',
-        'ascension_bossMaterial',
-        'talent_commonDrop',
-        'talent_book',
-        'talent_bossMaterial',
-        'talent_crown',
-      ],
-    }).notNull(),
-    materialId: integer('material_id').notNull(),
-    source: text('source', { enum: ['ambr', 'admin'] })
-      .notNull()
-      .default('ambr'),
-    ...governance,
-  },
-  (table) => [primaryKey({ columns: [table.characterId, table.slot] })],
-);
 
 export const gazetteBuilds = sqliteTable('gazette_builds', {
   // normalizeCharacterName(name) — already folds the Voyageur/Voyageuse gender

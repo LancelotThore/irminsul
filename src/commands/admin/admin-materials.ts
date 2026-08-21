@@ -1,176 +1,141 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import type {
   AutocompleteInteraction,
   ChatInputCommandInteraction,
   SlashCommandSubcommandGroupBuilder,
 } from 'discord.js';
-import { findCharacterByName, listCharacters } from '../../data/character.repository.js';
+import { normalizeCharacterName } from '../../data/gazette-build.repository.js';
 import {
-  findMaterialByName,
-  findMaterialsByCharacterName,
-  listAllMaterials,
+  findMaterialsGuideByCharacterName,
+  listMaterialsGuides,
 } from '../../data/materials.repository.js';
 import { db } from '../../db/client.js';
-import { characterMaterialSlots } from '../../db/schema.js';
-import { SLOT_LABELS } from '../../lib/material-slots.js';
-import type { MaterialSlot } from '../../lib/material-slots.js';
+import { materialsGuides } from '../../db/schema.js';
 
 const AUTOCOMPLETE_LIMIT = 25;
-
-function getSlotValue(
-  materials: Awaited<ReturnType<typeof findMaterialsByCharacterName>>,
-  slot: MaterialSlot,
-) {
-  if (!materials) return undefined;
-  return slot.startsWith('ascension_')
-    ? materials.ascension[slot.slice('ascension_'.length) as keyof typeof materials.ascension]
-    : materials.talents[slot.slice('talent_'.length) as keyof typeof materials.talents];
-}
 
 export function buildMaterialsGroup(
   group: SlashCommandSubcommandGroupBuilder,
 ): SlashCommandSubcommandGroupBuilder {
   return group
     .setName('materials')
-    .setDescription("Édite les matériaux d'un personnage")
+    .setDescription('Ajoute, modifie ou supprime un guide de matériaux')
     .addSubcommand((sub) =>
       sub
-        .setName('set')
-        .setDescription("Assigne un matériau à un emplacement d'ascension/talent")
+        .setName('add')
+        .setDescription('Ajoute un guide de matériaux')
         .addStringOption((o) =>
-          o
-            .setName('character')
-            .setDescription('Personnage')
-            .setRequired(true)
-            .setAutocomplete(true),
+          o.setName('name').setDescription('Nom du personnage').setRequired(true),
         )
         .addStringOption((o) =>
-          o
-            .setName('slot')
-            .setDescription('Emplacement')
-            .setRequired(true)
-            .addChoices(...Object.entries(SLOT_LABELS).map(([value, name]) => ({ name, value }))),
+          o.setName('image').setDescription("URL de l'image du guide").setRequired(true),
         )
         .addStringOption((o) =>
-          o.setName('material').setDescription('Matériau').setRequired(true).setAutocomplete(true),
+          o.setName('page').setDescription('URL de la page du guide').setRequired(true),
         ),
     )
     .addSubcommand((sub) =>
       sub
-        .setName('clear')
-        .setDescription("Retire le matériau d'un emplacement")
+        .setName('edit')
+        .setDescription('Modifie un guide de matériaux existant')
         .addStringOption((o) =>
-          o
-            .setName('character')
-            .setDescription('Personnage')
-            .setRequired(true)
-            .setAutocomplete(true),
+          o.setName('name').setDescription('Personnage').setRequired(true).setAutocomplete(true),
         )
         .addStringOption((o) =>
-          o
-            .setName('slot')
-            .setDescription('Emplacement')
-            .setRequired(true)
-            .addChoices(...Object.entries(SLOT_LABELS).map(([value, name]) => ({ name, value }))),
+          o.setName('image').setDescription("Nouvelle URL de l'image").setRequired(false),
+        )
+        .addStringOption((o) =>
+          o.setName('page').setDescription('Nouvelle URL de la page').setRequired(false),
+        ),
+    )
+    .addSubcommand((sub) =>
+      sub
+        .setName('delete')
+        .setDescription('Supprime un guide de matériaux')
+        .addStringOption((o) =>
+          o.setName('name').setDescription('Personnage').setRequired(true).setAutocomplete(true),
         ),
     );
 }
 
-async function handleSet(interaction: ChatInputCommandInteraction): Promise<void> {
-  const characterName = interaction.options.getString('character', true);
-  const slot = interaction.options.getString('slot', true) as MaterialSlot;
-  const materialName = interaction.options.getString('material', true);
+function slugify(name: string): string {
+  return name.trim().toLowerCase().replace(/\s+/g, '-');
+}
 
-  const character = await findCharacterByName(characterName);
-  if (!character) {
+async function handleAdd(interaction: ChatInputCommandInteraction): Promise<void> {
+  const name = interaction.options.getString('name', true);
+  const imageUrl = interaction.options.getString('image', true);
+  const pageUrl = interaction.options.getString('page', true);
+
+  const existing = await findMaterialsGuideByCharacterName(name);
+  if (existing) {
     await interaction.reply({
-      content: `Aucun personnage nommé "${characterName}".`,
+      content: `Un guide existe déjà pour "${name}" (utilise \`/admin materials edit\`).`,
       ephemeral: true,
     });
     return;
   }
 
-  const material = await findMaterialByName(materialName);
-  if (!material) {
-    await interaction.reply({
-      content: `Aucun matériau nommé "${materialName}".`,
-      ephemeral: true,
-    });
+  await db.insert(materialsGuides).values({
+    characterKey: normalizeCharacterName(name),
+    slug: slugify(name),
+    name,
+    imageUrl,
+    pageUrl,
+    source: 'admin',
+    locked: true,
+    updatedBy: interaction.user.id,
+  });
+  await interaction.reply({ content: `Guide de matériaux "${name}" ajouté.`, ephemeral: true });
+}
+
+async function handleEdit(interaction: ChatInputCommandInteraction): Promise<void> {
+  const name = interaction.options.getString('name', true);
+  const found = await findMaterialsGuideByCharacterName(name);
+  if (!found) {
+    await interaction.reply({ content: `Aucun guide trouvé pour "${name}".`, ephemeral: true });
     return;
   }
-  if (material.rank === undefined) {
-    await interaction.reply({
-      content: `"${material.name}" n'a pas de rareté connue, impossible de l'utiliser ici.`,
-      ephemeral: true,
-    });
-    return;
-  }
+
+  const imageUrl = interaction.options.getString('image');
+  const pageUrl = interaction.options.getString('page');
 
   await db
-    .insert(characterMaterialSlots)
-    .values({
-      characterId: character.id,
-      slot,
-      materialId: material.id,
+    .update(materialsGuides)
+    .set({
+      ...(imageUrl && { imageUrl }),
+      ...(pageUrl && { pageUrl }),
       source: 'admin',
       locked: true,
       updatedBy: interaction.user.id,
+      updatedAt: sql`(current_timestamp)`,
     })
-    .onConflictDoUpdate({
-      target: [characterMaterialSlots.characterId, characterMaterialSlots.slot],
-      set: {
-        materialId: material.id,
-        hidden: false,
-        source: 'admin',
-        locked: true,
-        updatedBy: interaction.user.id,
-        updatedAt: sql`(current_timestamp)`,
-      },
-    });
+    .where(eq(materialsGuides.characterKey, normalizeCharacterName(found.name)));
   await interaction.reply({
-    content: `"${SLOT_LABELS[slot]}" pour ${character.name} → ${material.name}.`,
+    content: `Guide de matériaux "${found.name}" modifié.`,
     ephemeral: true,
   });
 }
 
-async function handleClear(interaction: ChatInputCommandInteraction): Promise<void> {
-  const characterName = interaction.options.getString('character', true);
-  const slot = interaction.options.getString('slot', true) as MaterialSlot;
-
-  const character = await findCharacterByName(characterName);
-  if (!character) {
-    await interaction.reply({
-      content: `Aucun personnage nommé "${characterName}".`,
-      ephemeral: true,
-    });
-    return;
-  }
-
-  const currentMaterials = await findMaterialsByCharacterName(characterName);
-  if (!getSlotValue(currentMaterials, slot)) {
-    await interaction.reply({
-      content: `"${SLOT_LABELS[slot]}" est déjà vide pour ${character.name}.`,
-      ephemeral: true,
-    });
+async function handleDelete(interaction: ChatInputCommandInteraction): Promise<void> {
+  const name = interaction.options.getString('name', true);
+  const found = await findMaterialsGuideByCharacterName(name);
+  if (!found) {
+    await interaction.reply({ content: `Aucun guide trouvé pour "${name}".`, ephemeral: true });
     return;
   }
 
   await db
-    .update(characterMaterialSlots)
+    .update(materialsGuides)
     .set({
       hidden: true,
       locked: true,
       updatedBy: interaction.user.id,
       updatedAt: sql`(current_timestamp)`,
     })
-    .where(
-      and(
-        eq(characterMaterialSlots.characterId, character.id),
-        eq(characterMaterialSlots.slot, slot),
-      ),
-    );
+    .where(eq(materialsGuides.characterKey, normalizeCharacterName(found.name)));
   await interaction.reply({
-    content: `"${SLOT_LABELS[slot]}" retiré pour ${character.name}.`,
+    content: `Guide de matériaux "${found.name}" supprimé.`,
     ephemeral: true,
   });
 }
@@ -179,38 +144,21 @@ export async function handleMaterialsSubcommand(
   interaction: ChatInputCommandInteraction,
 ): Promise<void> {
   const subcommand = interaction.options.getSubcommand(true);
-  if (subcommand === 'set') return handleSet(interaction);
-  if (subcommand === 'clear') return handleClear(interaction);
+  if (subcommand === 'add') return handleAdd(interaction);
+  if (subcommand === 'edit') return handleEdit(interaction);
+  if (subcommand === 'delete') return handleDelete(interaction);
 }
 
 export async function autocompleteMaterialsOption(
   interaction: AutocompleteInteraction,
 ): Promise<void> {
-  const focusedOption = interaction.options.getFocused(true);
-  const focused = focusedOption.value.toLowerCase();
+  const focused = interaction.options.getFocused().toLowerCase();
+  const guides = await listMaterialsGuides();
 
-  if (focusedOption.name === 'character') {
-    // Any character can receive a material slot, not just ones that already have one
-    // (e.g. a freshly admin-added character has none yet) — so this suggests from the
-    // full character list rather than only characters with existing slots.
-    const all = await listCharacters();
-    const matches = all
-      .filter((c) => c.name.toLowerCase().includes(focused))
-      .slice(0, AUTOCOMPLETE_LIMIT)
-      .map((c) => ({ name: c.name, value: c.name }));
-    await interaction.respond(matches);
-    return;
-  }
+  const matches = guides
+    .filter((g) => g.name.toLowerCase().includes(focused))
+    .slice(0, AUTOCOMPLETE_LIMIT)
+    .map((g) => ({ name: g.name, value: g.name }));
 
-  if (focusedOption.name === 'material') {
-    const all = await listAllMaterials();
-    const matches = all
-      .filter((m) => m.name.toLowerCase().includes(focused))
-      .slice(0, AUTOCOMPLETE_LIMIT)
-      .map((m) => ({ name: m.name, value: m.name }));
-    await interaction.respond(matches);
-    return;
-  }
-
-  await interaction.respond([]);
+  await interaction.respond(matches);
 }

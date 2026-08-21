@@ -31,12 +31,3 @@ export async function fetchAmbrList<TItem>(resource: string): Promise<Record<str
   const data = await fetchAmbrJson<AmbrListResponse<TItem>['data']>(resource);
   return data.items;
 }
-
-// Detail endpoints (e.g. /avatar/{id}) return the object directly as `data`, unlike list
-// endpoints which wrap it in `{ items: {...} }`.
-export async function fetchAmbrDetail<TDetail>(
-  resource: string,
-  id: number | string,
-): Promise<TDetail> {
-  return fetchAmbrJson<TDetail>(`${resource}/${id}`);
-}
