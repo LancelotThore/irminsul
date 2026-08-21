@@ -1,15 +1,15 @@
 import { runMigrations } from '../src/db/migrate.js';
 import { logger } from '../src/lib/logger.js';
-import { syncCharacterMaterials } from '../src/services/ambr/sync.js';
+import { syncMaterialsGuides } from '../src/services/sephijin/sync.js';
 
 async function main(): Promise<void> {
   runMigrations();
 
-  const results = await syncCharacterMaterials();
-  logger.info(`Synced ascension/talent materials for ${results.length} characters.`);
+  const pages = await syncMaterialsGuides();
+  logger.info(`Synced ${pages.length} Sephijin materials guides.`);
 }
 
 main().catch((error: unknown) => {
-  logger.error({ err: error }, 'Character materials sync failed');
+  logger.error({ err: error }, 'Materials guide sync failed');
   process.exit(1);
 });

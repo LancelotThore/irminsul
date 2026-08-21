@@ -1,9 +1,11 @@
 import { SlashCommandBuilder } from 'discord.js';
 import type { Command } from '../types/command.js';
+import { listCharacters } from '../data/character.repository.js';
 import {
-  findMaterialsByCharacterName,
-  listCharacterMaterials,
+  findMaterialsGuideByCharacterName,
+  listMaterialsGuides,
 } from '../data/materials.repository.js';
+import { normalizeCharacterName } from '../data/gazette-build.repository.js';
 import { buildMaterialsEmbed } from '../embeds/materials.embed.js';
 
 const AUTOCOMPLETE_LIMIT = 25;
@@ -11,7 +13,7 @@ const AUTOCOMPLETE_LIMIT = 25;
 export const materials: Command = {
   data: new SlashCommandBuilder()
     .setName('materials')
-    .setDescription('Show what to farm to fully ascend and upgrade a character')
+    .setDescription('Show the farming materials guide for a Genshin Impact character')
     .addStringOption((option) =>
       option
         .setName('name')
@@ -22,11 +24,11 @@ export const materials: Command = {
 
   async execute(interaction) {
     const name = interaction.options.getString('name', true);
-    const found = await findMaterialsByCharacterName(name);
+    const found = await findMaterialsGuideByCharacterName(name);
 
     if (!found) {
       await interaction.reply({
-        content: `Aucune donnée de matériaux trouvée pour "${name}".`,
+        content: `Aucun guide de matériaux trouvé pour "${name}".`,
         ephemeral: true,
       });
       return;
@@ -37,15 +39,17 @@ export const materials: Command = {
 
   async autocomplete(interaction) {
     const focused = interaction.options.getFocused().toLowerCase();
-    const all = await listCharacterMaterials();
+    const [characters, guides] = await Promise.all([listCharacters(), listMaterialsGuides()]);
+    const guideNames = new Set(guides.map((g) => normalizeCharacterName(g.name)));
 
     const seenNames = new Set<string>();
     const matches: { name: string; value: string }[] = [];
-    for (const candidate of all) {
-      const key = candidate.characterName.toLowerCase();
+    for (const candidate of characters) {
+      if (!guideNames.has(normalizeCharacterName(candidate.name))) continue;
+      const key = candidate.name.toLowerCase();
       if (!key.includes(focused) || seenNames.has(key)) continue;
       seenNames.add(key);
-      matches.push({ name: candidate.characterName, value: candidate.characterName });
+      matches.push({ name: candidate.name, value: candidate.name });
       if (matches.length >= AUTOCOMPLETE_LIMIT) break;
     }
 
